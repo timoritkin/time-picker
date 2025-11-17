@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Appointment Time Picker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+
+        .date-section {
+            margin-bottom: 25px;
+        }
+
+        .date-label {
+            display: block;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .date-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+
+        .date-input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .time-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+
+        .time-slot {
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: #f8f9fa;
+            cursor: pointer;
+            text-align: center;
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+            transition: all 0.3s ease;
+        }
+
+        .time-slot:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+            transform: translateY(-2px);
+        }
+
+        .time-slot.selected {
+            background: #667eea;
+            border-color: #667eea;
+            color: white;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-copy {
+            background: #25D366;
+            color: white;
+        }
+
+        .btn-copy:hover {
+            background: #20ba5a;
+            transform: translateY(-2px);
+        }
+
+        .btn-copy:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-clear {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .btn-clear:hover {
+            background: #ee5a52;
+            transform: translateY(-2px);
+        }
+
+        .preview {
+            background: #f8f9fa;
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            min-height: 80px;
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+            direction: rtl;
+            text-align: right;
+            white-space: pre-wrap;
+        }
+
+        .preview.empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-style: italic;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #333;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-size: 14px;
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        @media (max-width: 480px) {
+            .time-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📅 Appointment Time Picker</h1>
+        <p class="subtitle">Select date and available times for your patient</p>
+        
+        <div class="date-section">
+            <label class="date-label">📆 Select Date:</label>
+            <input type="date" class="date-input" id="dateInput">
+        </div>
+
+        <div class="time-grid" id="timeGrid"></div>
+        
+        <div class="actions">
+            <button class="btn btn-copy" id="copyBtn" disabled>
+                📋 Copy for WhatsApp
+            </button>
+            <button class="btn btn-clear" id="clearBtn">
+                🗑️ Clear All
+            </button>
+        </div>
+        
+        <div class="preview empty" id="preview">
+            Select date and times to see preview...
+        </div>
+    </div>
+
+    <div class="toast" id="toast">Copied to clipboard! ✓</div>
+
+    <script>
+        const timeGrid = document.getElementById('timeGrid');
+        const preview = document.getElementById('preview');
+        const copyBtn = document.getElementById('copyBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const toast = document.getElementById('toast');
+        const dateInput = document.getElementById('dateInput');
+
+        let selectedTimes = [];
+
+        // Set default date to today
+        const today = new Date();
+        dateInput.valueAsDate = today;
+
+        // Listen for date changes
+        dateInput.addEventListener('change', updatePreview);
+
+        // Generate time slots from 8:00 AM to 12:00 PM (noon)
+        function generateTimeSlots() {
+            const slots = [];
+            for (let hour = 8; hour <= 12; hour++) {
+                for (let minute = 0; minute < 60; minute += 30) {
+                    const timeString = formatTime(hour, minute);
+                    slots.push(timeString);
+                    // Stop at 12:00 PM
+                    if (hour === 12 && minute === 0) break;
+                }
+            }
+            return slots;
+        }
+
+        function formatTime(hour, minute) {
+            const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+            const displayMinute = minute.toString().padStart(2, '0');
+            return `${displayHour}:${displayMinute}`;
+        }
+
+        // Create time slot elements
+        const timeSlots = generateTimeSlots();
+        timeSlots.forEach(time => {
+            const slot = document.createElement('div');
+            slot.className = 'time-slot';
+            slot.textContent = time;
+            slot.addEventListener('click', () => toggleTime(time, slot));
+            timeGrid.appendChild(slot);
+        });
+
+        function toggleTime(time, element) {
+            const index = selectedTimes.indexOf(time);
+            
+            if (index > -1) {
+                selectedTimes.splice(index, 1);
+                element.classList.remove('selected');
+            } else {
+                selectedTimes.push(time);
+                element.classList.add('selected');
+            }
+
+            updatePreview();
+        }
+
+        function updatePreview() {
+            const hasDate = dateInput.value !== '';
+            const hasTimes = selectedTimes.length > 0;
+
+            if (!hasDate && !hasTimes) {
+                preview.className = 'preview empty';
+                preview.textContent = 'Select date and times to see preview...';
+                copyBtn.disabled = true;
+            } else if (!hasDate) {
+                preview.className = 'preview empty';
+                preview.textContent = 'Please select a date...';
+                copyBtn.disabled = true;
+            } else if (!hasTimes) {
+                preview.className = 'preview empty';
+                preview.textContent = 'Please select at least one time...';
+                copyBtn.disabled = true;
+            } else {
+                preview.className = 'preview';
+                preview.textContent = formatMessage();
+                copyBtn.disabled = false;
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString + 'T00:00:00');
+            const day = date.getDate();
+            const month = date.getMonth() + 1;
+            const year = date.getFullYear();
+            
+            // Hebrew day names
+            const hebrewDays = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+            const dayOfWeek = date.getDay();
+            const hebrewDayName = hebrewDays[dayOfWeek];
+            
+            return `יום ${hebrewDayName} ${day}/${month}/${year}`;
+        }
+
+        function formatMessage() {
+            if (selectedTimes.length === 0 || !dateInput.value) return '';
+            
+            const sorted = [...selectedTimes].sort((a, b) => {
+                return timeSlots.indexOf(a) - timeSlots.indexOf(b);
+            });
+
+            const formattedDate = formatDate(dateInput.value);
+
+            // Add RTL mark (U+200F) to force right-to-left direction
+            return `\u200Fאלה הם השעות הפנויות:\n\u200Fתאריך: ${formattedDate}\n\n${sorted.map(time => `\u200F• ${time}`).join('\n')}\n\n\u200Fמה תרצו לבחור?`;
+        }
+
+        copyBtn.addEventListener('click', async () => {
+            const message = formatMessage();
+            
+            try {
+                await navigator.clipboard.writeText(message);
+                showToast();
+            } catch (err) {
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = message;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showToast();
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            selectedTimes = [];
+            dateInput.valueAsDate = new Date();
+            document.querySelectorAll('.time-slot').forEach(slot => {
+                slot.classList.remove('selected');
+            });
+            updatePreview();
+        });
+
+        function showToast() {
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
+        // Initialize preview
+        updatePreview();
+    </script>
+</body>
+</html>
